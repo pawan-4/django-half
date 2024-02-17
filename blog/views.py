@@ -7,26 +7,57 @@ from django.contrib import messages
 from django.contrib.auth.forms import AuthenticationForm , authenticate
 from collections import Counter
 from django.contrib.auth import logout
+from django.http import HttpResponse
+from django.views import View
 
 def post_list(request, category_slug=None):
     posts = Post.objects.all().order_by('published_date')
-    print(posts)
+   # categories = Category.objects.all()
 
-    return render(request, 'blog/post_list.html', {'posts': posts})
+  #  if category_slug:
+   #     category = get_object_or_404(Category, slug=category_slug)
+    #    posts = posts.filter(category=category)
+
+    return render(request, 'blog/post_list.html', {'posts': posts, })
+
 
 def post_detail(request, slug):
     post = get_object_or_404(Post, slug=slug)
-    return render(request, 'blog/post_detail.html', {'post': post})
+    comments = Comment.objects.filter(post=post, parent_comment=None)
+    comment_form = CommentForm()
+    reply_form = CommentForm()
+
+    if request.method == 'POST':
+        comment_form = CommentForm(request.POST)
+        if comment_form.is_valid():
+            comment = comment_form.save(commit=False)
+            comment.post = post
+            comment.author = request.user
+            comment.created_date = timezone.now()
+            parent_comment_id = request.POST.get('parent_comment_id')
+
+            if parent_comment_id:
+                parent_comment = get_object_or_404(Comment, id=parent_comment_id)
+                comment.parent_comment = parent_comment
+
+            comment.save()
+            return redirect('post_detail', slug=post.slug)
+
+    return render(request, 'blog/post_detail.html', {'post': post, 'comments': comments, 'comment_form': comment_form, 'reply_form': reply_form})
+
+
 
 def post_new(request):
     if request.method == "POST":
-        form = PostForm(request.POST)
+        form = PostForm(request.POST, request.FILES,)
         if form.is_valid():
             post = form.save(commit=False)
             post.author = request.user
             post.published_date = timezone.now()
             post.save()
-            return redirect('post_detail', slug=post.slug)
+            form.save_m2m()
+            return redirect('post_list')
+        
     else:
         form = PostForm()
     return render(request, 'blog/post_edit.html', {'form': form})
@@ -34,12 +65,13 @@ def post_new(request):
 def post_edit(request, slug):
     post = get_object_or_404(Post, slug=slug)
     if request.method == "POST":
-        form = PostForm(request.POST, instance=post)
+        form = PostForm(request.POST,request.FILES,instance=post)
         if form.is_valid():
             post = form.save(commit=False)
             post.author = request.user
             post.published_date = timezone.now()
             post.save()
+            form.save_m2m()
             return redirect('post_detail', slug=post.slug)
     else:
         form = PostForm(instance=post)
@@ -61,7 +93,7 @@ def tag_list(request):
     return render(request, 'blog/tag_list.html', {'tags': tags})
 
 def tag_post(request, slug):
-    tag = Post.objects.filter(tags__slug = Tag.objects.filter(slug=slug).last())
+    tag = Post.objects.filter(tags__slug = Tag.objects.filter(slug=slug).last().slug)
     
     return render(request,'blog/post_list.html', {'posts': tag})
   
@@ -89,23 +121,31 @@ def user_login(request):
 
 def user_logout(request):
     logout(request)
-    return redirect('blog/user_login.html') 
+    
+    return redirect('post_list' )
 
 def user_detail(request, user_id):
     print(user_id)
     print("---------")
-    user = User.objects.get(id=user_id)
+    user = get_object_or_404(User, id=user_id)
     
+    # Pass the 'user' object to the template for rendering
     return render(request, 'blog/user_detail.html', {'user': user})
 
-def edit_view(request, pk):
-    instance = get_object_or_404(User, pk=pk)
+def edit_profile(request, user_id):
+    user = User.objects.get(id=user_id)
+
     if request.method == 'POST':
-        form = User(request.POST, instance=instance)
+        form = EditProfileForm(request.POST,request.FILES, instance=request.user)
         if form.is_valid():
             form.save()
-            return redirect('user_detail', pk=pk)  
-    else:
-        form = User(instance=instance)
 
-    return render(request, 'user_edit.html', {'form': form})
+            messages.success(request, 'Your profile was successfully updated.')
+            return redirect('user_detail', user_id=user.id)  
+        else:
+            messages.error(request, 'There was an error updating your profile. Please correct the errors below.')
+    else:
+        form = EditProfileForm(instance=request.user)
+
+    return render(request, 'blog/edit_profile.html', {'user': user, 'form': form})
+

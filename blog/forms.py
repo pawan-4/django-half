@@ -1,12 +1,13 @@
 from django import forms
-from django.contrib.auth.forms import UserCreationForm ,AuthenticationForm
-from .models import Post ,User
+from django.contrib.auth.forms import UserCreationForm ,AuthenticationForm ,UserChangeForm
+from .models import Post ,User,Comment
+from django.core.validators import RegexValidator
 
 class PostForm(forms.ModelForm):
 
     class Meta:
         model = Post
-        fields = ('title', 'text','category','tags')
+        fields = ('title', 'text','category','tags','thumbnail','feature_image')
 
 class UserCreationForm(UserCreationForm):
 
@@ -16,21 +17,41 @@ class UserCreationForm(UserCreationForm):
 
 
 class SignUpForm(UserCreationForm):
-    
+    dob = forms.DateField(widget=forms.TextInput(attrs={'type': 'date'}))
+    mobile_number = forms.IntegerField(
+        validators=[
+            RegexValidator(
+                regex='^\d+$',
+                message='Mobile number must contain only numeric digits.',
+                code='invalid_mobile_number'
+            )
+        ],
+        required=False
+    )    
     class Meta:
         model = User
-        fields = ['username','email', 'password1', 'password2','first_name','last_name']
+        fields = ['username', 'email', 'password1', 'password2', 'first_name', 'last_name', 'city', 'country', 'dob','mobile_number']
+
 
 class LoginForm(AuthenticationForm):
     class Meta:
         model = User
 
 
-#class MyCustomForm(forms.Form):
+class EditProfileForm(UserChangeForm):
+
+    email = forms.EmailField(required=True)
+    mobile_number = forms.CharField(max_length=15, required=False)
+    dob = forms.DateField()
+    city =forms.CharField(max_length=15, required=True)
+    country=forms.CharField(max_length=15, required=True)
+    class Meta:
+        model = User
+        fields = ['email','mobile_number','dob','city','country', 'avatar']
     
- ##  profile_picture = forms.ImageField(upload_to='profile_pics/', null=True, blank=True)
-   # dob = forms.DateField(null=True, blank=True)
-    #mobile_number = forms.CharField(max_length=15, null=True, blank=True)
-    #about  = forms.TextField()
-    #first_name =forms.TextField()
-    #last_name =forms.TextFiel()
+class CommentForm(forms.ModelForm):
+    class Meta:
+        model = Comment
+        fields = ['text' ]
+
+
